@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Buy Voucher</title>
+</head>
+<body>
+  <h2>Buy Voucher</h2>
+  <form id="voucherForm">
+    <input type="text" id="name" placeholder="Your Name" required><br>
+    <input type="email" id="email" placeholder="Your Email" required><br>
+    <input type="tel" id="phone" placeholder="Your Phone" required><br>
+    <input type="number" id="quantity" min="1" placeholder="Quantity" required><br>
+    <button type="submit">Pay with Paystack</button>
+  </form>
+  
+  <script src="https://js.paystack.co/v1/inline.js"></script>
+  <script>
+    const scriptURL = "https://script.google.com/macros/s/AKfycbwGGWcbI9Xc-sDh_ROdXEwxEf1tTv_JGAI87sUkTlmkWA0lsjtLQd64eluNSnEOJ2CW/exec"; // paste from deployment
+
+    document.getElementById("voucherForm").addEventListener("submit", function(e) {
+      e.preventDefault();
+      
+      const name = document.getElementById("name").value;
+      const email = document.getElementById("email").value;
+      const phone = document.getElementById("phone").value;
+      const quantity = parseInt(document.getElementById("quantity").value);
+      
+      // Pricing logic
+      let pricePer = 1;
+      if (quantity >= 5 && quantity <= 8) pricePer = 22;
+      else if (quantity >= 10) pricePer = 19;
+      const amount = pricePer * quantity * 100; // convert to pesewas
+      
+      var handler = PaystackPop.setup({
+        key: "pk_live_8c56d91cee6884d988dd8355981e0134ab72b94b",
+        email: email,
+        amount: amount,
+        currency: "GHS",
+        callback: function(response){
+          // Send to Google backend
+          fetch(scriptURL, {
+            method: "POST",
+            body: JSON.stringify({name, email, phone, quantity, amount: amount/100}),
+          })
+          .then(res => res.json())
+          .then(data => {
+            alert("Payment successful! Vouchers sent to your email.");
+          })
+          .catch(err => alert("Error: " + err));
+        },
+        onClose: function(){
+          alert("Transaction cancelled.");
+        }
+      });
+      handler.openIframe();
+    });
+  </script>
+</body>
+</html>
