@@ -48,7 +48,7 @@
 
   <script src="https://js.paystack.co/v1/inline.js"></script>
   <script>
-    const PAYSTACK_PUBLIC_KEY = 'pk_live_8c56d91cee6884d988dd8355981e0134ab72b94b';
+    const PAYSTACK_PUBLIC_KEY = 'pk_test_5ac575deecd34c69d0e21584d36d46df951b0224';
     const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbydFVop5oqafC_XmzecYa4p-zOufkt4rLG9pzSW03Er91DTT0eiYmiJE3sPG7SApjdl/exec';
 
     const qtyEl = document.getElementById('qty');
@@ -92,6 +92,7 @@
         key: PAYSTACK_PUBLIC_KEY,
         email: email,
         amount: amountKobo,
+        currency: 'GHS', // Added to ensure GHS is used
         ref: ref,
         // metadata optional
         metadata: {
