@@ -1,131 +1,169 @@
-<!DOCTYPE html>
-<html lang="en">
+<!doctype html>
+<html>
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Voucher Purchase</title>
-    <style>
-        body { font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; }
-        form { display: flex; flex-direction: column; }
-        label { margin-top: 10px; }
-        input, select { padding: 8px; margin-top: 5px; }
-        button { margin-top: 20px; padding: 10px; background: #007bff; color: white; border: none; cursor: pointer; }
-        #result { margin-top: 20px; color: green; }
-        #error { margin-top: 20px; color: red; }
-    </style>
-    <!-- Paystack JS -->
-    <script src="https://js.paystack.co/v1/inline.js"></script>
+  <meta charset="utf-8" />
+  <title>Buy WAEC Vouchers — TwinAzz</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <style>
+    body { font-family: Arial, sans-serif; max-width:700px; margin:30px auto; padding:20px; }
+    label { display:block; margin-top:10px }
+    input, select { padding:8px; width:100%; box-sizing:border-box; }
+    button { margin-top:12px; padding:10px 16px; }
+    .result { margin-top:16px; white-space:pre-wrap; background:#f6f6f6; padding:12px; border-radius:6px; }
+  </style>
 </head>
 <body>
-    <h1>Buy WAEC Vouchers</h1>
-    <form id="purchaseForm">
-        <label for="quantity">Quantity:</label>
-        <select id="quantity" required>
-            <option value="1">1</option>
-            <option value="2">2</option>
-            <!-- Add up to, say, 20; or use input type="number" -->
-            <option value="20">20</option>
-        </select>
+  <h2>Buy WAEC Voucher</h2>
+  <form id="buyForm" onsubmit="return false;">
+    <label>Full name (optional)
+      <input id="fullname" type="text" placeholder="Full name">
+    </label>
+    <label>Email (Gmail recommended)
+      <input id="email" type="email" required placeholder="buyer@gmail.com">
+    </label>
+    <label>Quantity
+      <select id="qty">
+        <option value="1">1</option>
+        <option value="2">2</option>
+        <option value="3">3</option>
+        <option value="4">4</option>
+        <option value="5">5</option>
+        <option value="8">8</option>
+        <option value="10">10</option>
+      </select>
+    </label>
 
-        <label for="email">Email:</label>
-        <input type="email" id="email" required>
+    <p id="priceDisplay">Price each: ₵24 — Total: ₵24</p>
 
-        <div id="priceDisplay">Price: Calculating...</div>
+    <button id="payBtn">Pay & Get Voucher</button>
+  </form>
 
-        <button type="button" onclick="initiatePayment()">Pay Now</button>
-    </form>
+  <div style="margin-top:20px;">
+    <h4>Or re-download by reference</h4>
+    <input id="refInput" placeholder="Enter reference">
+    <button id="fetchBtn">Fetch Voucher</button>
+  </div>
 
-    <div id="result"></div>
-    <div id="error"></div>
+  <div id="result" class="result" style="display:none"></div>
 
-    <script>
-        const PUBLIC_KEY = 'pk_test_5ac575deecd34c69d0e21584d36d46df951b0224'; // Replace with your Paystack test public key
-        const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbxMEBd80l0g1R8Qg6CUCv-rMS77QHL0kloOjZCnQRMuuLDCL4daob5Cwx4ZfSK91bCF/exec'; // Replace with your deployed web app URL
+  <script src="https://js.paystack.co/v1/inline.js"></script>
+  <script>
+    const PAYSTACK_PUBLIC_KEY = 'pk_test_5ac575deecd34c69d0e21584d36d46df951b0224';
+    const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbydFVop5oqafC_XmzecYa4p-zOufkt4rLG9pzSW03Er91DTT0eiYmiJE3sPG7SApjdl/exec';
 
-        // Calculate price based on tiers (in GHS)
-        function calculatePrice(quantity) {
-            if (quantity >= 10) return 19 * quantity;
-            if (quantity >= 5) return 22 * quantity;
-            return 24 * quantity;
+    const qtyEl = document.getElementById('qty');
+    const priceDisplay = document.getElementById('priceDisplay');
+    const emailEl = document.getElementById('email');
+    const payBtn = document.getElementById('payBtn');
+    const resultEl = document.getElementById('result');
+    const fullnameEl = document.getElementById('fullname');
+
+    function computePriceEach(qty) {
+      // reflect same logic as Apps Script
+      const TEST_MODE = false; // set true here for local dev if desired
+      if (TEST_MODE) return 1.00;
+      if (qty >= 10) return 19.00;
+      if (qty >= 5) return 22.00;
+      return 24.00;
+    }
+
+    function updatePrice() {
+      const q = Number(qtyEl.value);
+      const per = computePriceEach(q);
+      const total = (per * q).toFixed(2);
+      priceDisplay.innerText = `Price each: ₵${per} — Total: ₵${total}`;
+    }
+    qtyEl.addEventListener('change', updatePrice);
+    updatePrice();
+
+    payBtn.addEventListener('click', function () {
+      const email = emailEl.value.trim();
+      if (!email) { alert('Enter email'); return; }
+      const qty = Number(qtyEl.value);
+      const per = computePriceEach(qty);
+      const total = (per * qty);
+      // Paystack amount is in kobo (GHS * 100)
+      const amountKobo = Math.round(total * 100);
+
+      // generate a unique reference client-side (Paystack also generates one)
+      const ref = 'txn-' + Date.now() + '-' + Math.floor(Math.random()*1000);
+
+      const handler = PaystackPop.setup({
+        key: PAYSTACK_PUBLIC_KEY,
+        email: email,
+        amount: amountKobo,
+        ref: ref,
+        // metadata optional
+        metadata: {
+          custom_fields: [
+            { display_name: "Name", variable_name: "fullname", value: fullnameEl.value || '' }
+          ]
+        },
+        callback: function(response){
+          // response.reference
+          // call Apps Script to verify & allocate vouchers
+          verifyOnServer(response.reference, email, qty);
+        },
+        onClose: function(){
+          // user closed window
         }
+      });
+      handler.openIframe();
+    });
 
-        // Update price display
-        document.getElementById('quantity').addEventListener('change', function() {
-            const qty = parseInt(this.value);
-            const price = calculatePrice(qty);
-            document.getElementById('priceDisplay').innerText = `Price: ${price} GHS`;
-        });
+    function verifyOnServer(reference, email, qty) {
+      resultEl.style.display = 'block';
+      resultEl.innerText = 'Verifying payment and fetching voucher...';
 
-        // Initiate payment
-        function initiatePayment() {
-            const email = document.getElementById('email').value;
-            const quantity = parseInt(document.getElementById('quantity').value);
-            if (!email || !quantity) {
-                alert('Please fill all fields');
-                return;
-            }
-
-            const amountGHS = calculatePrice(quantity);
-            const amountPesewas = amountGHS * 100; // Paystack uses subunits
-
-            // For testing: Override to 1 GHS (comment out for production)
-            // const amountPesewas = 100; // 1 GHS
-
-            var handler = PaystackPop.setup({
-                key: PUBLIC_KEY,
-                email: email,
-                amount: amountPesewas,
-                currency: 'GHS',
-                callback: function(response) {
-                    // Payment success callback - send to Apps Script for verification
-                    verifyAndProcess(response.reference, email, quantity, amountPesewas);
-                },
-                onClose: function() {
-                    alert('Payment window closed');
-                }
-            });
-            handler.openIframe();
+      fetch(APPS_SCRIPT_URL, {
+        method: 'POST',
+        body: JSON.stringify({ action: 'verifyPayment', reference: reference, email: email, qty: qty }),
+        headers: { 'Content-Type': 'application/json' }
+      }).then(r => r.json()).then(data => {
+        if (data.status === 'success') {
+          resultEl.innerText = 'Payment verified. Reference: ' + data.reference + '\n\n' + data.voucherText;
+          // trigger browser download
+          downloadTextAsFile('vouchers-' + data.reference + '.txt', data.voucherText);
+        } else {
+          resultEl.innerText = 'Error: ' + (data.message || JSON.stringify(data));
         }
+      }).catch(err => {
+        resultEl.innerText = 'Error contacting server: ' + err;
+      });
+    }
 
-        // Send to Apps Script
-        function verifyAndProcess(reference, email, quantity, expectedAmount) {
-            fetch(SCRIPT_URL, {
-                method: 'POST',
-                body: JSON.stringify({ reference, email, quantity, expectedAmount }),
-                headers: { 'Content-Type': 'application/json' }
-            })
-            .then(response => response.json())
-            .then(data => {
-                if (data.success) {
-                    // Display vouchers
-                    let voucherText = 'Your WAEC checkers are:\n';
-                    data.vouchers.forEach((v, index) => {
-                        voucherText += `(SN: ${v.sn}, PIN: ${v.pin})\n`;
-                    });
-                    voucherText += '\nPlease visit eresults.waecgh.org to print your results.\nFor issues, contact +233598160732 (WhatsApp).';
+    function downloadTextAsFile(filename, text) {
+      const blob = new Blob([text], { type: 'text/plain' });
+      const link = document.createElement('a');
+      link.href = window.URL.createObjectURL(blob);
+      link.download = filename;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+    }
 
-                    document.getElementById('result').innerText = 'Success! Vouchers downloaded. Check your email too.\n' + voucherText;
-
-                    // Create downloadable text file
-                    const blob = new Blob([voucherText], { type: 'text/plain' });
-                    const url = URL.createObjectURL(blob);
-                    const a = document.createElement('a');
-                    a.href = url;
-                    a.download = 'waec_vouchers.txt';
-                    document.body.appendChild(a);
-                    a.click();
-                    document.body.removeChild(a);
-                } else {
-                    document.getElementById('error').innerText = data.message;
-                }
-            })
-            .catch(error => {
-                document.getElementById('error').innerText = 'Error: ' + error;
-            });
+    // Re-download by reference
+    document.getElementById('fetchBtn').addEventListener('click', function () {
+      const ref = document.getElementById('refInput').value.trim();
+      if (!ref) { alert('Enter reference'); return; }
+      resultEl.style.display = 'block';
+      resultEl.innerText = 'Fetching...';
+      fetch(APPS_SCRIPT_URL, {
+        method: 'POST',
+        body: JSON.stringify({ action: 'fetchByRef', reference: ref }),
+        headers: { 'Content-Type': 'application/json' }
+      }).then(r => r.json()).then(data => {
+        if (data.status === 'success') {
+          resultEl.innerText = 'Reference: ' + ref + '\n\n' + data.voucherText;
+          downloadTextAsFile('vouchers-' + ref + '.txt', data.voucherText);
+        } else {
+          resultEl.innerText = 'Error: ' + (data.message || JSON.stringify(data));
         }
+      }).catch(err => {
+        resultEl.innerText = 'Error contacting server: ' + err;
+      });
+    });
 
-        // Initial price update
-        document.getElementById('quantity').dispatchEvent(new Event('change'));
-    </script>
+  </script>
 </body>
 </html>
