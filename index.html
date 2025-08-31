@@ -1,60 +1,131 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <title>Buy Voucher</title>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Voucher Purchase</title>
+    <style>
+        body { font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; }
+        form { display: flex; flex-direction: column; }
+        label { margin-top: 10px; }
+        input, select { padding: 8px; margin-top: 5px; }
+        button { margin-top: 20px; padding: 10px; background: #007bff; color: white; border: none; cursor: pointer; }
+        #result { margin-top: 20px; color: green; }
+        #error { margin-top: 20px; color: red; }
+    </style>
+    <!-- Paystack JS -->
+    <script src="https://js.paystack.co/v1/inline.js"></script>
 </head>
 <body>
-  <h2>Buy Voucher</h2>
-  <form id="voucherForm">
-    <input type="text" id="name" placeholder="Your Name" required><br>
-    <input type="email" id="email" placeholder="Your Email" required><br>
-    <input type="tel" id="phone" placeholder="Your Phone" required><br>
-    <input type="number" id="quantity" min="1" placeholder="Quantity" required><br>
-    <button type="submit">Pay with Paystack</button>
-  </form>
-  
-  <script src="https://js.paystack.co/v1/inline.js"></script>
-  <script>
-    const scriptURL = "https://script.google.com/macros/s/AKfycbwGGWcbI9Xc-sDh_ROdXEwxEf1tTv_JGAI87sUkTlmkWA0lsjtLQd64eluNSnEOJ2CW/exec"; // paste from deployment
+    <h1>Buy WAEC Vouchers</h1>
+    <form id="purchaseForm">
+        <label for="quantity">Quantity:</label>
+        <select id="quantity" required>
+            <option value="1">1</option>
+            <option value="2">2</option>
+            <!-- Add up to, say, 20; or use input type="number" -->
+            <option value="20">20</option>
+        </select>
 
-    document.getElementById("voucherForm").addEventListener("submit", function(e) {
-      e.preventDefault();
-      
-      const name = document.getElementById("name").value;
-      const email = document.getElementById("email").value;
-      const phone = document.getElementById("phone").value;
-      const quantity = parseInt(document.getElementById("quantity").value);
-      
-      // Pricing logic
-      let pricePer = 1;
-      if (quantity >= 5 && quantity <= 8) pricePer = 22;
-      else if (quantity >= 10) pricePer = 19;
-      const amount = pricePer * quantity * 100; // convert to pesewas
-      
-      var handler = PaystackPop.setup({
-        key: "pk_live_8c56d91cee6884d988dd8355981e0134ab72b94b",
-        email: email,
-        amount: amount,
-        currency: "GHS",
-        callback: function(response){
-          // Send to Google backend
-          fetch(scriptURL, {
-            method: "POST",
-            body: JSON.stringify({name, email, phone, quantity, amount: amount/100}),
-          })
-          .then(res => res.json())
-          .then(data => {
-            alert("Payment successful! Vouchers sent to your email.");
-          })
-          .catch(err => alert("Error: " + err));
-        },
-        onClose: function(){
-          alert("Transaction cancelled.");
+        <label for="email">Email:</label>
+        <input type="email" id="email" required>
+
+        <div id="priceDisplay">Price: Calculating...</div>
+
+        <button type="button" onclick="initiatePayment()">Pay Now</button>
+    </form>
+
+    <div id="result"></div>
+    <div id="error"></div>
+
+    <script>
+        const PUBLIC_KEY = 'pk_test_5ac575deecd34c69d0e21584d36d46df951b0224'; // Replace with your Paystack test public key
+        const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbxMEBd80l0g1R8Qg6CUCv-rMS77QHL0kloOjZCnQRMuuLDCL4daob5Cwx4ZfSK91bCF/exec'; // Replace with your deployed web app URL
+
+        // Calculate price based on tiers (in GHS)
+        function calculatePrice(quantity) {
+            if (quantity >= 10) return 19 * quantity;
+            if (quantity >= 5) return 22 * quantity;
+            return 24 * quantity;
         }
-      });
-      handler.openIframe();
-    });
-  </script>
+
+        // Update price display
+        document.getElementById('quantity').addEventListener('change', function() {
+            const qty = parseInt(this.value);
+            const price = calculatePrice(qty);
+            document.getElementById('priceDisplay').innerText = `Price: ${price} GHS`;
+        });
+
+        // Initiate payment
+        function initiatePayment() {
+            const email = document.getElementById('email').value;
+            const quantity = parseInt(document.getElementById('quantity').value);
+            if (!email || !quantity) {
+                alert('Please fill all fields');
+                return;
+            }
+
+            const amountGHS = calculatePrice(quantity);
+            const amountPesewas = amountGHS * 100; // Paystack uses subunits
+
+            // For testing: Override to 1 GHS (comment out for production)
+            // const amountPesewas = 100; // 1 GHS
+
+            var handler = PaystackPop.setup({
+                key: PUBLIC_KEY,
+                email: email,
+                amount: amountPesewas,
+                currency: 'GHS',
+                callback: function(response) {
+                    // Payment success callback - send to Apps Script for verification
+                    verifyAndProcess(response.reference, email, quantity, amountPesewas);
+                },
+                onClose: function() {
+                    alert('Payment window closed');
+                }
+            });
+            handler.openIframe();
+        }
+
+        // Send to Apps Script
+        function verifyAndProcess(reference, email, quantity, expectedAmount) {
+            fetch(SCRIPT_URL, {
+                method: 'POST',
+                body: JSON.stringify({ reference, email, quantity, expectedAmount }),
+                headers: { 'Content-Type': 'application/json' }
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    // Display vouchers
+                    let voucherText = 'Your WAEC checkers are:\n';
+                    data.vouchers.forEach((v, index) => {
+                        voucherText += `(SN: ${v.sn}, PIN: ${v.pin})\n`;
+                    });
+                    voucherText += '\nPlease visit eresults.waecgh.org to print your results.\nFor issues, contact +233598160732 (WhatsApp).';
+
+                    document.getElementById('result').innerText = 'Success! Vouchers downloaded. Check your email too.\n' + voucherText;
+
+                    // Create downloadable text file
+                    const blob = new Blob([voucherText], { type: 'text/plain' });
+                    const url = URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = 'waec_vouchers.txt';
+                    document.body.appendChild(a);
+                    a.click();
+                    document.body.removeChild(a);
+                } else {
+                    document.getElementById('error').innerText = data.message;
+                }
+            })
+            .catch(error => {
+                document.getElementById('error').innerText = 'Error: ' + error;
+            });
+        }
+
+        // Initial price update
+        document.getElementById('quantity').dispatchEvent(new Event('change'));
+    </script>
 </body>
 </html>
